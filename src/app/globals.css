@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 250 250 252;
+  --surface: 255 255 255;
+  --muted: 244 244 247;
+  --fg: 17 17 19;
+  --subtle: 113 113 122;
+  --accent: 59 92 255;
+  --accent-fg: 255 255 255;
+  --danger: 220 38 38;
+  --warn: 234 88 12;
+  --ok: 22 163 74;
+  --border: 228 228 235;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 10 10 12;
+    --surface: 22 22 28;
+    --muted: 30 30 38;
+    --fg: 242 242 247;
+    --subtle: 156 163 175;
+    --accent: 130 156 255;
+    --accent-fg: 10 10 14;
+    --danger: 248 113 113;
+    --warn: 251 146 60;
+    --ok: 74 222 128;
+    --border: 39 39 47;
+  }
+}
+
+html, body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Hide scrollbar on the inbox list while preserving scroll. */
+.scroll-clean::-webkit-scrollbar { width: 0; height: 0; }
+
+/* Saliency rail color (subtle vertical bar in each row) */
+.saliency-bar {
+  width: 3px;
+  border-radius: 999px;
+  background: rgb(var(--border));
+}
+.saliency-1 { background: rgb(var(--subtle) / 0.35); }
+.saliency-2 { background: rgb(var(--subtle) / 0.55); }
+.saliency-3 { background: rgb(var(--warn) / 0.4); }
+.saliency-4 { background: rgb(var(--warn) / 0.7); }
+.saliency-5 { background: rgb(var(--warn)); }
+.saliency-6 { background: rgb(var(--danger) / 0.7); }
+.saliency-7,
+.saliency-8,
+.saliency-9,
+.saliency-10 { background: rgb(var(--danger)); }
+
+/* Pulse card subtle aurora */
+.pulse-aurora {
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgb(var(--accent) / 0.18), transparent 60%),
+    radial-gradient(120% 120% at 100% 100%, rgb(var(--warn) / 0.14), transparent 60%),
+    rgb(var(--surface));
+}
+
+/* Smart shimmer for the Pulse loading state */
+.shimmer {
+  background-image: linear-gradient(
+    90deg,
+    rgb(var(--muted)) 0%,
+    rgb(var(--border)) 50%,
+    rgb(var(--muted)) 100%
+  );
+  background-size: 800px 100%;
+  animation: shimmer 1.6s linear infinite;
+}
