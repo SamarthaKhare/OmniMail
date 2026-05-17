@@ -1,8 +1,5 @@
 {
   "framework": "nextjs",
   "buildCommand": "npm run build",
-  "installCommand": "npm install",
-  "env": {
-    "OMNIMAIL_BASE_URL": "https://your-app.vercel.app"
-  }
+  "installCommand": "npm install"
 }
