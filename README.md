@@ -2,7 +2,7 @@
 
 A mobile-first, AI-native universal email PWA. Built around an **Agent OS**
 architecture: discrete agents (Sync, Triage, Scribe, Orchestrator) plus
-reusable Skills (vector search, summarizer, protocol facade).
+reusable Skills (vector search, summarizer, protocol facade)
 
 ## Quickstart
 
