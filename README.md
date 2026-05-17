@@ -117,13 +117,32 @@ This is local-dev grade — for production, derive the key from a real KMS.
 
 ## AI strategy
 
-LLM calls go through `src/lib/llm.ts`:
+LLM calls go through `src/lib/llm.ts` (Vercel AI SDK). The app picks a
+provider at runtime based on which key is present:
 
-1. If `ANTHROPIC_API_KEY` is set → Claude Sonnet 4.5 (via Vercel AI SDK).
-2. Else if `OPENAI_API_KEY` is set → GPT-4o-mini.
-3. Else → **deterministic local fallback** (rule-based templates).
+1. `OPENAI_API_KEY` → **GPT-4o-mini** ← the default for this deployment
+2. `ANTHROPIC_API_KEY` → Claude Sonnet 4.5 (takes priority if both are set)
+3. Neither → **deterministic local fallback** (rule-based templates)
 
 The app works in all three modes; AI quality just degrades gracefully.
+
+### Setting the OpenAI key
+
+**Locally** — copy your key into `.env.local`:
+
+```
+OPENAI_API_KEY=sk-proj-xxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+then restart the dev server.
+
+**On Vercel** — add `OPENAI_API_KEY` under **Project → Settings → Environment
+Variables** (apply to Production, Preview, and Development), then redeploy.
+Env vars only take effect on new builds.
+
+> Note on priority: if you ever set both `ANTHROPIC_API_KEY` and
+> `OPENAI_API_KEY`, Anthropic wins because it's checked first in
+> `src/lib/llm.ts`. To force OpenAI, leave `ANTHROPIC_API_KEY` unset.
 
 ## Project layout (Agent OS)
 
