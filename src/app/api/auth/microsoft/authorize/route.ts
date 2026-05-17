@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildAuthorizeUrl, makeState, microsoftConfig } from "@/lib/oauth";
 
+// OAuth authorize must NEVER be cached — see google/authorize for full context.
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET() {
   const cfg = microsoftConfig();
   if (!cfg) {

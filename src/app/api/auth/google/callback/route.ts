@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { exchangeCode, googleConfig } from "@/lib/oauth";
 import { upsertAccount } from "@/lib/accounts-store";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export async function GET(req: Request) {
   const cfg = googleConfig();
   if (!cfg) {
