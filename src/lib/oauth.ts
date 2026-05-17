@@ -53,6 +53,13 @@ export async function exchangeCode(
     redirect_uri: cfg.redirectUri,
     grant_type: "authorization_code",
   });
+
+  // TEMP DEBUG — remove after OAuth works.
+  console.log("[oauth/exchangeCode] tokenUrl:", cfg.tokenUrl);
+  console.log("[oauth/exchangeCode] redirect_uri being sent:", JSON.stringify(cfg.redirectUri));
+  console.log("[oauth/exchangeCode] client_id being sent:", JSON.stringify(cfg.clientId));
+  console.log("[oauth/exchangeCode] body string:", body.toString());
+
   const res = await fetch(cfg.tokenUrl, {
     method: "POST",
     headers: { "content-type": "application/x-www-form-urlencoded" },
@@ -60,6 +67,7 @@ export async function exchangeCode(
   });
   if (!res.ok) {
     const text = await res.text();
+    console.log("[oauth/exchangeCode] Google response:", res.status, text);
     throw new Error(`OAuth token exchange failed: ${res.status} ${text}`);
   }
   const json = (await res.json()) as {
