@@ -13,7 +13,14 @@ import { sealObject, openObject, type SealedBlob } from "./crypto";
  * without decrypting every record on boot.
  */
 
-const STATE_DIR = path.resolve(process.cwd(), ".omnimail");
+// On Vercel the project dir (/var/task) is read-only; only /tmp is writable.
+// /tmp is ephemeral — wiped on cold start — but that's acceptable for the
+// demo: a connected account survives within a warm function instance and
+// the mock data falls back in cleanly when it's gone. For real persistence,
+// swap this for Vercel KV or Postgres.
+const STATE_DIR = process.env.VERCEL
+  ? path.resolve("/tmp", ".omnimail")
+  : path.resolve(process.cwd(), ".omnimail");
 const ACCOUNTS_PATH = path.join(STATE_DIR, "accounts.json");
 
 export type Credentials =

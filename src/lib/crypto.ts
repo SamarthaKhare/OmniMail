@@ -18,7 +18,10 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 
-const STATE_DIR = path.resolve(process.cwd(), ".omnimail");
+// See accounts-store.ts for why /tmp on Vercel.
+const STATE_DIR = process.env.VERCEL
+  ? path.resolve("/tmp", ".omnimail")
+  : path.resolve(process.cwd(), ".omnimail");
 const KEY_PATH = path.join(STATE_DIR, "key");
 
 let _key: Buffer | null = null;
