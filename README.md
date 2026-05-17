@@ -35,6 +35,134 @@ features degrade to deterministic local templates when no LLM key is set.
 - **Orchestrator** answers free-form queries: "find the flight info from last
   week", "what did I miss today?", "from alex", "in:urgent".
 
+## Architecture — Agent OS
+
+OmniMail is split along one principle: **decisions live in Agents, capabilities
+live in Skills, lifecycle lives in Hooks, and I/O lives in Providers.**
+
+```
+┌────────────────────────── Client (Next.js App Router) ──────────────────────────┐
+│                                                                                 │
+│  Components ──► useEmailProtocol (skill) ──► /api/* (fetch)                     │
+│                                                       │                         │
+└───────────────────────────────────────────────────────┼─────────────────────────┘
+                                                       │
+┌──────────────────────────── Server ───────────────────┴─────────────────────────┐
+│                                                                                 │
+│   Route handler         Orchestrator                                            │
+│   (/api/inbox, etc.) ──►  (routes intent)                                       │
+│                              │                                                  │
+│                ┌─────────────┼──────────────┬───────────────┐                   │
+│                ▼             ▼              ▼               ▼                   │
+│              Sync          Triage         Scribe       Vector Search            │
+│              Agent         Agent          Agent           (skill)               │
+│                │             │              │                                   │
+│                ▼             ▼              ▼                                   │
+│         getProviderForAccount(id) ──► Provider (mock | gmail | outlook | imap)  │
+│                                              │                                  │
+└──────────────────────────────────────────────┼──────────────────────────────────┘
+                                               ▼
+                                      Gmail REST / Graph / IMAP / mock dataset
+```
+
+Two rules keep this honest:
+
+1. **Agents never call providers directly** — they go through `getProviderForAccount(id)` in `src/providers/registry.ts`, which picks the right adapter at runtime based on the account record. Adding a fifth provider is one file plus one line in the registry.
+2. **The UI never imports a provider** — components only talk to the protocol facade (`useEmailProtocol`), which speaks REST to `/api/*` routes. The browser bundle doesn't know Gmail or IMAP exists.
+
+### Agents — `src/agents/`
+
+Decision-makers. Stateless functions on top of the unified email schema in `src/types/protocol.ts`.
+
+| Agent | File | Role |
+| --- | --- | --- |
+| **Sync** | [`sync.ts`](src/agents/sync.ts) | Fans out across every connected account in parallel; triages each message before it leaves; returns a unified, sorted inbox. |
+| **Triage** | [`triage.ts`](src/agents/triage.ts) | Deterministic saliency 0–10 + category + intent extraction. Runs offline, no LLM key required. Rubric: sender relationship (-2..+3), urgency markers (0..+3), action required (0..+2), promo noise (-3..0). |
+| **Scribe** | [`scribe.ts`](src/agents/scribe.ts) | Generates **The Pulse** (24h executive summary), **Smart Reply** drafts in 3 voices, and **Thread Summaries**. LLM-driven with a deterministic local fallback. |
+| **Orchestrator** | [`orchestrator.ts`](src/agents/orchestrator.ts) | Free-form intent router. Classifies a natural-language query into SEARCH / FILTER / SUMMARIZE and dispatches to the right agent + skill combo. Rule-based first, LLM only on fallback. |
+
+### Skills — `src/skills/`
+
+Reusable, stateless capabilities. Agents compose them; they never compose agents.
+
+| Skill | File | Role |
+| --- | --- | --- |
+| **useEmailProtocol** | [`use-email-protocol.ts`](src/skills/use-email-protocol.ts) | Client-side facade over `/api/*`. Optimistic updates for archive/delete/star/markRead; rollback on server failure. The only thing the UI knows about "providers". |
+| **skill-summarizer** | [`skill-summarizer.ts`](src/skills/skill-summarizer.ts) | Context-window packing for LLM calls. Trims & ranks an email corpus to fit a ~6k-token budget without truncating the most salient messages. |
+| **skill-vector-search** | [`skill-vector-search.ts`](src/skills/skill-vector-search.ts) | Zero-dependency TF-IDF cosine search with email-specific boosts (sender, subject weight, recency). Drop-in replaceable with real embeddings — the function signature mirrors `embeddings.create()`. |
+
+### Hooks — `src/hooks/`
+
+React lifecycle glue. Stateful but UI-only.
+
+| Hook | File | Role |
+| --- | --- | --- |
+| **useSwipe** | [`use-swipe.ts`](src/hooks/use-swipe.ts) | Touch-gesture handler powering every email row. Left swipe → archive, right swipe → star, long-right swipe (≥140px) → AI summary. Visuals are deferred to the caller so the hook stays portable. |
+
+### Providers — `src/providers/`
+
+I/O adapters. All four are live implementations sitting behind the same `Provider` interface in `src/types/protocol.ts`.
+
+| Provider | File | Wire protocol |
+| --- | --- | --- |
+| **Mock** | [`mock-provider.ts`](src/providers/mock-provider.ts) | In-memory dataset of 3 accounts × 14 messages — seeds the demo zero-config. |
+| **Gmail** | [`gmail-provider.ts`](src/providers/gmail-provider.ts) | Gmail REST API + OAuth2. Lazy access-token refresh. |
+| **Outlook** | [`outlook-provider.ts`](src/providers/outlook-provider.ts) | Microsoft Graph + OAuth2. |
+| **IMAP** | [`imap-provider.ts`](src/providers/imap-provider.ts) | imapflow + nodemailer. Yahoo + AOL only by product design (enforced in [`src/lib/imap-services.ts`](src/lib/imap-services.ts)). |
+
+The **registry** at [`src/providers/registry.ts`](src/providers/registry.ts) holds two functions worth knowing:
+
+- `getActiveAccounts()` → connected accounts, or the mock dataset when none exist
+- `getProviderForAccount(accountId)` → the right Provider for that account id
+
+## Request workflows
+
+Three traces that show how the layers fit together end-to-end.
+
+### 1. Loading the inbox (`GET /api/inbox`)
+
+```
+Browser ──► useEmailProtocol.listMessages()
+            └── fetch GET /api/inbox?folder=inbox
+                └── route handler
+                    ├── getActiveAccounts()                        ← registry
+                    ├── for each account in parallel:
+                    │     getProviderForAccount(id).listMessages() ← Mock | Gmail | Outlook | IMAP
+                    └── syncAccounts() → triage each message       ← Sync + Triage agents
+                        return unified, sorted, triaged inbox
+```
+
+Every message that hits the UI carries an `ai` block (saliency, category, intents) — the row colour, sort order, and Pulse selection all read from it.
+
+### 2. Generating The Pulse (`GET /api/pulse`)
+
+```
+Browser ──► fetch GET /api/pulse
+            └── route handler
+                ├── syncInbox() → last 24h, triaged                ← Sync
+                ├── skill-summarizer.pack(top N by saliency)       ← Skill
+                └── scribe.generatePulse(packedCorpus)             ← Scribe
+                    ├── if LLM key → Anthropic / OpenAI            ← src/lib/llm.ts
+                    └── else      → deterministic template fallback
+                    return { headline, bullets[{threadId, text, saliency}] }
+```
+
+Each bullet is a clickable jump-link to the underlying thread; the UI just maps `threadId → /thread/[id]`.
+
+### 3. Free-form query ("find the flight info from last week")
+
+```
+Browser ──► fetch GET /api/search?q=find the flight info from last week
+            └── route handler
+                └── orchestrator.route(query)                      ← Orchestrator
+                    ├── classify → SEARCH                          ← rule-based first
+                    ├── parse time window → last week
+                    ├── skill-vector-search(query, corpus)         ← Skill
+                    └── return ranked threads
+```
+
+The classifier is a tiny pattern matcher — it only escalates to the LLM when no rule matches, so the common path is single-digit milliseconds.
+
 ## Provider strategy
 
 OmniMail supports **multiple connected accounts of different types simultaneously**
