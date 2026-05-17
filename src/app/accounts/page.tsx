@@ -172,7 +172,8 @@ function AccountsInner() {
           <ProviderButton
             label="Connect Gmail"
             sub="OAuth via Google"
-            disabled={!data?.available.gmail}
+            loading={loading}
+            disabled={!loading && !data?.available.gmail}
             disabledHint="Server is missing GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET — see README."
             href="/api/auth/google/authorize"
             color="#ea4335"
@@ -180,7 +181,8 @@ function AccountsInner() {
           <ProviderButton
             label="Connect Outlook / Office 365"
             sub="OAuth via Microsoft"
-            disabled={!data?.available.outlook}
+            loading={loading}
+            disabled={!loading && !data?.available.outlook}
             disabledHint="Server is missing MS_CLIENT_ID / MS_CLIENT_SECRET — see README."
             href="/api/auth/microsoft/authorize"
             color="#0078d4"
@@ -224,6 +226,7 @@ function AccountsInner() {
 function ProviderButton({
   label,
   sub,
+  loading,
   disabled,
   disabledHint,
   href,
@@ -231,11 +234,17 @@ function ProviderButton({
 }: {
   label: string;
   sub: string;
+  loading?: boolean;
   disabled: boolean | undefined;
   disabledHint: string;
   href: string;
   color: string;
 }) {
+  // Three states: loading (neutral placeholder), disabled (env-var missing
+  // hint), enabled (real link). Without `loading`, the very first render
+  // shows the disabledHint for ~200ms while /api/accounts is in flight,
+  // which falsely accuses the server of missing env vars.
+  const subText = loading ? "Checking server config…" : disabled ? disabledHint : sub;
   const inner = (
     <>
       <span
@@ -246,15 +255,16 @@ function ProviderButton({
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{label}</p>
-        <p className="text-xs text-subtle">{disabled ? disabledHint : sub}</p>
+        <p className="text-xs text-subtle">{subText}</p>
       </div>
-      <Plus className="h-4 w-4 text-subtle" />
+      {loading ? <Loader2 className="h-4 w-4 animate-spin text-subtle" /> : <Plus className="h-4 w-4 text-subtle" />}
     </>
   );
-  if (disabled) {
+  if (loading || disabled) {
     return (
       <div
         aria-disabled
+        aria-busy={loading || undefined}
         className="flex w-full items-center gap-3 rounded-xl border border-border/70 bg-surface/40 px-3 py-3 text-left opacity-60"
       >
         {inner}
